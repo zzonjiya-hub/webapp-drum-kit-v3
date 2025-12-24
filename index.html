@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>Drum Kit (Real Audio)</title>
+    <style>
+        /* 기존 스타일 유지 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+        }
+        
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1a1a2e;
+        }
+        
+        .container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .drum-wrapper {
+            position: relative;
+        }
+        
+        .drum-image {
+            display: block;
+        }
+        
+        .touch-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .drum-zone {
+            pointer-events: auto;
+            cursor: pointer;
+            fill: transparent;
+            stroke: transparent;
+            transition: fill 0.15s;
+        }
+        
+        .drum-zone:hover {
+            fill: transparent;
+            stroke: transparent;
+        }
+        
+        .drum-zone.cymbal.active {
+            fill: url(#cymbalGradient);
+        }
+        
+        .drum-zone.drum.active {
+            fill: url(#drumGradient);
+        }
+        
+        .fullscreen-btn {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: background 0.2s;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
+        .fullscreen-btn:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+        
+        .fullscreen-btn svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+        }
+        
+        .fullscreen-btn .exit-icon {
+            display: none;
+        }
+        
+        .fullscreen-btn.is-fullscreen .enter-icon {
+            display: none;
+        }
+        
+        .fullscreen-btn.is-fullscreen .exit-icon {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="drum-wrapper" id="drumWrapper">
+            <img src="drum.jpg" alt="Drum Kit" class="drum-image" id="drumImage">
+            <svg class="touch-layer" id="touchLayer" viewBox="0 0 1280 720" preserveAspectRatio="none">
+                <defs>
+                    <radialGradient id="cymbalGradient">
+                        <stop offset="0%" stop-color="rgba(255, 220, 0, 0.5)"/>
+                        <stop offset="100%" stop-color="rgba(255, 220, 0, 0)"/>
+                    </radialGradient>
+                    <radialGradient id="drumGradient">
+                        <stop offset="0%" stop-color="rgba(255, 255, 255, 0.5)"/>
+                        <stop offset="100%" stop-color="rgba(255, 255, 255, 0)"/>
+                    </radialGradient>
+                </defs>
+                
+                <ellipse id="crash" class="drum-zone cymbal" data-drum="crash" cx="195" cy="120" rx="185" ry="91"/>
+                <ellipse id="hihat" class="drum-zone cymbal" data-drum="hihat" cx="210" cy="335" rx="150" ry="86"/>
+                <ellipse id="snare" class="drum-zone drum" data-drum="snare" cx="295" cy="545" rx="165" ry="116"/>
+                <ellipse id="hitom" class="drum-zone drum" data-drum="hitom" cx="490" cy="225" rx="112" ry="97"/>
+                <ellipse id="midtom" class="drum-zone drum" data-drum="midtom" cx="780" cy="210" rx="115" ry="100"/>
+                <ellipse id="bass" class="drum-zone drum" data-drum="bass" cx="630" cy="560" rx="165" ry="150"/>
+                <ellipse id="ride" class="drum-zone cymbal" data-drum="ride" cx="1150" cy="145" rx="245" ry="143"/>
+                <ellipse id="lowtom" class="drum-zone drum" data-drum="lowtom" cx="990" cy="520" rx="188" ry="125"/>
+            </svg>
+        </div>
+    </div>
+    
+    <button class="fullscreen-btn" id="fullscreenBtn" title="전체화면">
+        <svg class="enter-icon" viewBox="0 0 24 24">
+            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+        <svg class="exit-icon" viewBox="0 0 24 24">
+            <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+        </svg>
+    </button>
+
+    <script>
+        // --- 1. 화면 리사이징 로직 (기존 유지) ---
+        const drumImage = document.getElementById('drumImage');
+        const touchLayer = document.getElementById('touchLayer');
+        const drumWrapper = document.getElementById('drumWrapper');
+        
+        const IMG_WIDTH = 1280;
+        const IMG_HEIGHT = 720;
+        const IMG_RATIO = IMG_WIDTH / IMG_HEIGHT;
+        
+        function resizeDrum() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const windowRatio = windowWidth / windowHeight;
+            let newWidth, newHeight;
+            
+            if (windowRatio > IMG_RATIO) {
+                newHeight = windowHeight;
+                newWidth = windowHeight * IMG_RATIO;
+            } else {
+                newWidth = windowWidth;
+                newHeight = windowWidth / IMG_RATIO;
+            }
+            
+            drumWrapper.style.width = newWidth + 'px';
+            drumWrapper.style.height = newHeight + 'px';
+            drumImage.style.width = newWidth + 'px';
+            drumImage.style.height = newHeight + 'px';
+        }
+        
+        drumImage.addEventListener('load', resizeDrum);
+        window.addEventListener('resize', resizeDrum);
+        window.addEventListener('orientationchange', () => { setTimeout(resizeDrum, 100); });
+        resizeDrum();
+        if (drumImage.complete) { resizeDrum(); }
+
+        // --- 2. 오디오 파일 설정 (수정됨) ---
+        let audioContext = null;
+        const audioBuffers = {}; // 로딩된 사운드 데이터 저장소
+
+        // 오디오 파일 경로 매핑 (sounds 폴더 필요)
+        const soundFiles = {
+            crash: 'sounds/crash.wav',
+            hihat: 'sounds/hihat.wav',
+            snare: 'sounds/snare.wav',
+            hitom: 'sounds/hitom.wav',
+            midtom: 'sounds/midtom.wav',
+            bass: 'sounds/bass.wav',
+            ride: 'sounds/ride.wav',
+            lowtom: 'sounds/lowtom.wav'
+        };
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // 컨텍스트 생성 시 파일 로딩 시작
+                loadAllSounds();
+            }
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+
+        // 모든 사운드 파일 비동기 로딩 및 디코딩
+        async function loadAllSounds() {
+            console.log('사운드 파일 로딩 시작...');
+            for (const [drumName, filePath] of Object.entries(soundFiles)) {
+                try {
+                    const response = await fetch(filePath);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const arrayBuffer = await response.arrayBuffer();
+                    const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                    audioBuffers[drumName] = decodedBuffer;
+                    console.log(`${drumName} 로딩 완료`);
+                } catch (error) {
+                    console.error(`사운드 로딩 실패 (${drumName}):`, error);
+                }
+            }
+        }
+
+        // 드럼 연주 함수 (수정됨: 버퍼 재생 방식)
+        function playDrum(drumType, element) {
+            initAudio(); // 오디오 컨텍스트 확인 및 시작
+            
+            // 1. 시각적 피드백
+            if (element) {
+                element.classList.add('active');
+                setTimeout(() => {
+                    element.classList.remove('active');
+                }, 100);
+            }
+
+            // 2. 오디오 재생 (버퍼가 로딩된 경우에만)
+            if (audioContext && audioBuffers[drumType]) {
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffers[drumType];
+                
+                // 게인 노드 (볼륨 조절용)
+                const gainNode = audioContext.createGain();
+                
+                // 악기별 미세 볼륨 조절 예시 (필요시 수정)
+                // if (drumType === 'ride') gainNode.gain.value = 0.8;
+                // else gainNode.gain.value = 1.0;
+                
+                source.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                // 즉시 재생
+                source.start(0);
+            } else {
+                if (!audioContext) {
+                    console.log('AudioContext not initialized yet.');
+                } else if (!audioBuffers[drumType]) {
+                    console.log(`Sound not loaded yet for: ${drumType}. Check file path.`);
+                }
+            }
+        }
+
+        // --- 3. 이벤트 핸들러 (기존 유지) ---
+        const drumZones = document.querySelectorAll('.drum-zone');
+        const activeTouches = new Map();
+
+        function getDrumAtPoint(x, y) {
+            const elements = document.elementsFromPoint(x, y);
+            for (let el of elements) {
+                if (el.classList.contains('drum-zone')) return el;
+            }
+            return null;
+        }
+
+        document.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            initAudio(); // 첫 터치 시 오디오 로딩 트리거
+            for (let touch of e.changedTouches) {
+                const drum = getDrumAtPoint(touch.clientX, touch.clientY);
+                if (drum) {
+                    const drumType = drum.dataset.drum;
+                    activeTouches.set(touch.identifier, drumType);
+                    playDrum(drumType, drum);
+                } else {
+                    activeTouches.set(touch.identifier, null);
+                }
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            for (let touch of e.changedTouches) {
+                const drum = getDrumAtPoint(touch.clientX, touch.clientY);
+                const lastDrumType = activeTouches.get(touch.identifier);
+                if (drum) {
+                    const drumType = drum.dataset.drum;
+                    if (drumType !== lastDrumType) {
+                        activeTouches.set(touch.identifier, drumType);
+                        playDrum(drumType, drum);
+                    }
+                } else {
+                    activeTouches.set(touch.identifier, null);
+                }
+            }
+        }, { passive: false });
+
+        document.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            for (let touch of e.changedTouches) {
+                activeTouches.delete(touch.identifier);
+            }
+        }, { passive: false });
+
+        // 마우스 이벤트
+        drumZones.forEach(zone => {
+            zone.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                initAudio();
+                const drumType = zone.dataset.drum;
+                playDrum(drumType, zone);
+            });
+        });
+
+        // 전체화면 및 기타 유틸리티 (기존 유지)
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        function getFullscreenElement() {
+            return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+        }
+        function requestFullscreen(element) {
+            if (element.requestFullscreen) return element.requestFullscreen();
+            if (element.webkitRequestFullscreen) return element.webkitRequestFullscreen();
+            if (element.mozRequestFullScreen) return element.mozRequestFullScreen();
+            return Promise.reject('Fullscreen not supported');
+        }
+        function exitFullscreen() {
+            if (document.exitFullscreen) return document.exitFullscreen();
+            if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+            return Promise.reject('Exit fullscreen not supported');
+        }
+        function toggleFullscreen() {
+            if (!getFullscreenElement()) {
+                requestFullscreen(document.documentElement).catch(() => {
+                    window.scrollTo(0, 1);
+                    alert('전체화면이 지원되지 않는 브라우저입니다.');
+                });
+            } else {
+                exitFullscreen();
+            }
+        }
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+        fullscreenBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            toggleFullscreen();
+        }, { passive: false });
+
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        function updateFullscreenButton() {
+            if (getFullscreenElement()) fullscreenBtn.classList.add('is-fullscreen');
+            else fullscreenBtn.classList.remove('is-fullscreen');
+        }
+
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) e.preventDefault();
+            lastTouchEnd = now;
+        }, { passive: false });
+
+        // 최초 클릭/터치 시 오디오 초기화
+        document.addEventListener('click', initAudio, { once: true });
+        document.addEventListener('touchstart', initAudio, { once: true });
+    </script>
+</body>
+</html>
